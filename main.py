@@ -5,6 +5,8 @@ import numpy as np
 import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
+from moviepy.editor import VideoFileClip
+
 
 from sklearn.preprocessing import StandardScaler
 import math
@@ -63,13 +65,6 @@ def color_hist(img, nbins=32):    #bins_range=(0, 256)
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
 
-def read_file_as_image(file):
-    image = mpimg.imread(file)
-    if not file.endswith('.png'):
-        image = image.astype(np.float32)/255
-    return image
-
-
 # Define a function to extract features from a list of images
 # Have this function call bin_spatial() and color_hist()
 def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
@@ -82,7 +77,9 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
     for file in imgs:
         file_features = []
         # Read in each one by one
-        image = read_file_as_image(file)
+        image = mpimg.imread(file)
+        if not file.endswith('.png'):
+            image = image.astype(np.float32)/255
         if color_space != 'RGB':
             if color_space == 'HSV':
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
@@ -314,7 +311,6 @@ def draw_labeled_bboxes(img, labels):
         cv2.rectangle(img, bbox[0], bbox[1], (0,0,255), 6)
     # Return the image
     return img
-    
 
 def run_find_cars(training_config):
     svc = training_config["svc"]
@@ -329,6 +325,36 @@ def run_find_cars(training_config):
     ystop = 656
     scale = 1.5
 
+    class CarDetector():
+        def __init__(self, img_range_255):
+            self.bboxes_list = []
+            self.img_range_255 = img_range_255
+        
+        def draw_vehicle_on_frame(self, img):
+            if self.img_range_255:
+                scaled_down_image = img.astype(np.float32) / 255
+
+            self.bboxes_list.append(
+                find_cars(scaled_down_image, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins))
+
+            num_frames_avail = min(5, len(self.bboxes_list))
+
+            heat = np.zeros_like(img[:,:,0]).astype(np.float)
+            # Add heat to each box in box list
+            
+            for bboxes in self.bboxes_list[-num_frames_avail:]:
+                heat = add_heat(heat, bboxes)
+        
+            # Apply threshold to help remove false positives
+            heat = apply_threshold(heat, max(1, 1 * num_frames_avail * 0.5))
+            # Visualize the heatmap when displaying    
+            heatmap = np.clip(heat, 0, 255)
+            # Find final boxes from heatmap using label function
+            labels = label(heatmap)
+            
+            return draw_labeled_bboxes(np.copy(img), labels)
+
+
     img_paths = glob.glob('test_images/*.jpg')
     num_img_paths = len(img_paths)
     num_cols = 1
@@ -337,24 +363,22 @@ def run_find_cars(training_config):
     plt.figure(figsize=(30, 15))
     subplot_idx = num_img_paths * 100 + 20 + 1
     for i, img_path in enumerate(img_paths):
-        img = read_file_as_image(img_path)
-        bboxes = find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
+        img = mpimg.imread(img_path)
+        car_detector = CarDetector(img_range_255=not img_path.endswith('.png'))
+        out_img = car_detector.draw_vehicle_on_frame(img)
 
-        heat = np.zeros_like(img[:,:,0]).astype(np.float)
-        # Add heat to each box in box list
-        heat = add_heat(heat, bboxes)
-    
-        # Apply threshold to help remove false positives
-        heat = apply_threshold(heat,1)
-        # Visualize the heatmap when displaying    
-        heatmap = np.clip(heat, 0, 255)
-        # Find final boxes from heatmap using label function
-        labels = label(heatmap)
-        out_img = draw_labeled_bboxes(np.copy(img), labels)
-
+        plt.imsave("output_images/output_{}.jpg".format(i), out_img)
         plt.subplot(subplot_idx + i)
         plt.imshow(out_img)
     plt.show()
+
+"""
+    original_clip = VideoFileClip('project_video.mp4')
+    car_detector = CarDetector(img_range_255=True)
+    clip_with_overlays = original_clip.fl_image(car_detector.draw_vehicle_on_frame)
+    clip_with_overlays.write_videofile('output_images/project_video.mp4', audio=False)
+"""
+
 
 def main():
     training_config = (train_car_non_car() 
