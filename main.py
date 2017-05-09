@@ -60,6 +60,13 @@ def color_hist(img, nbins=32):    #bins_range=(0, 256)
     # Return the individual histograms, bin_centers and feature vector
     return hist_features
 
+def read_file_as_image(file):
+    image = mpimg.imread(file)
+    if not file.endswith('.png'):
+        image = image.astype(np.float32)/255
+    return image
+
+
 # Define a function to extract features from a list of images
 # Have this function call bin_spatial() and color_hist()
 def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
@@ -72,10 +79,7 @@ def extract_features(imgs, color_space='RGB', spatial_size=(32, 32),
     for file in imgs:
         file_features = []
         # Read in each one by one
-        image = mpimg.imread(file)
-        if file.endswith('.png'):
-            image *= 255  # png are read as [0,1]
-        # apply color conversion if other than 'RGB'
+        image = read_file_as_image(file)
         if color_space != 'RGB':
             if color_space == 'HSV':
                 feature_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
@@ -129,7 +133,7 @@ NON_CAR_IMAGES = [
 
 MAX_SAMPLE_SIZE = 99999999999999999999
 #MAX_SAMPLE_SIZE = 500
-COLORSPACE = 'HSV'
+COLORSPACE = 'YCrCb'
 ORIENT = 18
 PIX_PER_CELL = 8
 CELL_PER_BLOCK = 3
@@ -212,7 +216,7 @@ def train_car_non_car():
 def find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins):
     
     draw_img = np.copy(img)
-    img = img.astype(np.float32)/255
+    #img = img.astype(np.float32)/255
     
     img_tosearch = img[ystart:ystop,:,:]
     ctrans_tosearch = convert_color(img_tosearch, conv='RGB2YCrCb')
@@ -290,18 +294,17 @@ def run_find_cars(training_config):
 
     img_paths = glob.glob('test_images/*.jpg')
     num_img_paths = len(img_paths)
-    #num_cols = 1
-    # num_rows = math.ceil(num_img_paths / num_cols)
+    num_cols = 1
+    num_rows = math.ceil(num_img_paths / num_cols)
     
-    #plt.figure(figsize=(100, 50))
-    #subplot_idx = num_img_paths * 100 + 20 + 1
+    plt.figure(figsize=(30, 15))
+    subplot_idx = num_img_paths * 100 + 20 + 1
     for i, img_path in enumerate(img_paths):
-        img = mpimg.imread(img_path)
+        img = read_file_as_image(img_path)
         out_img = find_cars(img, ystart, ystop, scale, svc, X_scaler, orient, pix_per_cell, cell_per_block, spatial_size, hist_bins)
 
-        #plt.subplot(subplot_idx + i)
+        plt.subplot(subplot_idx + i)
         plt.imshow(out_img)
-        break
     plt.show()
 
 def main():
